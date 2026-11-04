@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Relay</title>
+<style>
+:root {
+  --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6a66; --line: #e2e0da;
+  --accent: #2f5d50; --accent-ink: #ffffff; --warn: #9a5b00; --bad: #a3322a; --good: #2f6b3a; --run: #2b5797;
+  --chip: #efede8; --code: #f1efea;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161615; --panel: #1f1f1d; --ink: #ecebe6; --muted: #9c9a93; --line: #33322f;
+    --accent: #7fb8a4; --accent-ink: #10201b; --warn: #e0a64a; --bad: #e57f76; --good: #86c48f; --run: #8fb3ec;
+    --chip: #2a2a27; --code: #262624;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; }
+header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 14px 24px;
+  border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 2; }
+header h1 { font-size: 16px; margin: 0 8px 0 0; font-weight: 650; }
+.facts { display: flex; gap: 18px; flex-wrap: wrap; color: var(--muted); font-size: 13px; flex: 1; }
+.facts b { color: var(--ink); font-weight: 560; }
+main { max-width: 1180px; margin: 0 auto; padding: 20px 24px 60px; display: grid; gap: 14px; }
+button, select, input, textarea { font: inherit; color: inherit; }
+button { border: 1px solid var(--line); background: var(--panel); border-radius: 7px; padding: 5px 11px;
+  cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.danger { color: var(--bad); }
+button:disabled { opacity: .5; cursor: default; }
+input, select, textarea { background: var(--panel); border: 1px solid var(--line); border-radius: 7px;
+  padding: 5px 8px; width: 100%; }
+textarea { min-height: 64px; resize: vertical; }
+label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.spread { justify-content: space-between; }
+.title { font-size: 15px; font-weight: 640; }
+.sub { color: var(--muted); font-size: 12.5px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px;
+  background: var(--chip); font-size: 12px; white-space: nowrap; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.s-working .dot { background: var(--run); } .s-completed .dot { background: var(--good); }
+.s-waiting .dot, .s-cooling .dot, .s-cap .dot { background: var(--warn); }
+.s-bad .dot { background: var(--bad); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-top: 12px; }
+.order { display: flex; gap: 6px; flex-wrap: wrap; }
+.order span { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 9px; border-radius: 7px;
+  border: 1px solid var(--line); font-size: 12.5px; }
+.order span.off { opacity: .45; }
+.order button { padding: 0 6px; border: 0; background: transparent; color: var(--muted); }
+.tabs { display: flex; gap: 4px; margin-top: 14px; border-bottom: 1px solid var(--line); }
+.tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--muted); }
+.tabs button.on { color: var(--ink); border-bottom-color: var(--accent); }
+.pane { margin-top: 10px; max-height: 420px; overflow: auto; }
+pre { margin: 0; white-space: pre-wrap; word-break: break-word; background: var(--code); padding: 10px 12px;
+  border-radius: 8px; font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace; }
+.log div { padding: 4px 0; border-bottom: 1px dashed var(--line); font-size: 12.5px; }
+.log .command { font-family: ui-monospace, Menlo, monospace; }
+.log .error { color: var(--bad); }
+.log .edit { color: var(--accent); }
+.list a { display: block; padding: 4px 0; color: var(--ink); cursor: pointer; text-decoration: none;
+  font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+.list a:hover { color: var(--accent); }
+.split { display: grid; grid-template-columns: 240px 1fr; gap: 12px; }
+dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--ink);
+  padding: 20px; width: min(560px, 92vw); }
+dialog::backdrop { background: rgba(0,0,0,.35); }
+.empty { text-align: center; padding: 48px 20px; color: var(--muted); }
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink);
+  color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; }
+.toast.on { opacity: 1; }
+.switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: var(--ink); }
+.switch input { width: auto; }
+@media (max-width: 720px) { .split { grid-template-columns: 1fr; } header, main { padding-left: 16px; padding-right: 16px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Agent Relay</h1>
+  <div class="facts" id="facts"></div>
+  <label class="switch"><input type="checkbox" id="globalOn"> Relay on</label>
+  <button onclick="openSettings()">Settings</button>
+  <button class="primary" onclick="document.getElementById('addDlg').showModal()">Add project</button>
+</header>
+<main id="projects"></main>
+
+<dialog id="addDlg">
+  <form method="dialog" onsubmit="addProject(event)">
+    <div class="title">Add a project</div>
+    <p class="sub">The relay works in its own worktree beside the repo, on branch relay/&lt;name&gt;. It never merges or pushes.
+      Checks (tests, lint) and shared paths such as a .venv are set in the project's project.json.</p>
+    <div style="display:grid; gap:10px">
+      <label>Name <input name="name" required placeholder="My app"></label>
+      <label>Repository path <input name="repo" required placeholder="/Users/you/code/my-app"></label>
+      <label>First task (optional) <textarea name="next_task" placeholder="Leave empty to let the worker pick from the project's own checklist"></textarea></label>
+    </div>
+    <div class="row" style="justify-content:flex-end; margin-top:14px">
+      <button type="button" onclick="this.closest('dialog').close()">Cancel</button>
+      <button class="primary">Add</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="setDlg">
+  <form method="dialog" onsubmit="saveSettings(event)">
+    <div class="title">Settings</div>
+    <div style="display:grid; gap:10px; margin-top:12px">
+      <label>Default local model <select name="local_model" id="setModel"></select></label>
+      <label>RAM limit for the local model (GB) <input name="ram_limit_gb" type="number" step="0.01" min="4"></label>
+      <label>Start after Claude has been quiet for (minutes) <input name="quiet_min" type="number" min="1"></label>
+      <label>What counts as Claude being active
+        <select name="claude_activity_scope">
+          <option value="any">Any Claude session (frees the machine whenever you use Claude)</option>
+          <option value="project">Only sessions that mention the project</option>
+        </select></label>
+    </div>
+    <div class="row" style="justify-content:flex-end; margin-top:14px">
+      <button type="button" onclick="this.closest('dialog').close()">Cancel</button>
+      <button class="primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const TOKEN = "__TOKEN__";
+const openTab = {};   // project id -> selected tab
+const drafts = {};    // project id -> unsaved next-task text
+const qdrafts = {};   // project id -> unsaved queue text
+let last = null;
+
+async function api(path, body) {
+  const opts = { headers: { "X-Relay-Token": TOKEN } };
+  if (body !== undefined) { opts.method = "POST"; opts.body = JSON.stringify(body); opts.headers["Content-Type"] = "application/json"; }
+  const r = await fetch(path, opts);
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+function toast(msg) { const t = document.getElementById("toast"); t.textContent = msg; t.classList.add("on"); setTimeout(() => t.classList.remove("on"), 2200); }
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function ago(iso) {
+  if (!iso) return "never";
+  const s = (Date.now() - Date.parse(iso)) / 1000;
+  if (s < 60) return "just now"; if (s < 3600) return Math.round(s / 60) + " min ago";
+  if (s < 86400) return Math.round(s / 3600) + " h ago"; return Math.round(s / 86400) + " d ago";
+}
+const LABELS = { working: "Working", completed: "Finished a milestone", waiting_for_quiet: "Waiting for Claude to go quiet",
+  paused: "Paused", daily_cap: "Daily limit reached", cooling_down: "Cooling down", no_provider: "No worker available",
+  needs_attention: "Needs attention", preempted: "Stopped: Claude came back", stopped: "Stopped by you",
+  timeout: "Timed out", ram_limit: "Stopped: RAM limit", checks_failed: "Checks failed", no_changes: "No changes",
+  limit: "Usage limit hit", auth: "Login needed", failure: "Worker failed" };
+function cls(phase) {
+  if (phase === "working") return "s-working";
+  if (phase === "completed") return "s-completed";
+  if (["waiting_for_quiet", "preempted", "stopped"].includes(phase)) return "s-waiting";
+  if (["cooling_down", "daily_cap", "paused", "no_changes"].includes(phase)) return "s-cooling";
+  return phase ? "s-bad" : "";
+}
+const PROVIDER_NAMES = { local: "Local model", codex: "Codex", claude: "Claude (headless)" };
+
+async function refresh() {
+  try { last = await api("/api/status"); } catch (e) { document.getElementById("facts").textContent = "Controller not reachable: " + e.message; return; }
+  const s = last.settings;
+  document.getElementById("globalOn").checked = !!s.enabled;
+  const loaded = last.ollama.loaded.map(m => `${esc(m.name)} ${m.gb} GB`).join(", ") || "none";
+  const w = last.worker.project ? `<b>${esc(last.worker.provider)}</b> on <b>${esc(last.worker.project)}</b>` : "<b>idle</b>";
+  document.getElementById("facts").innerHTML =
+    `<span>Worker: ${w}</span><span>Claude last active: <b>${ago(last.claude_last_active)}</b></span>` +
+    `<span>Loaded model: <b>${loaded}</b></span><span>Default model: <b>${esc(s.local_model || "not set")}</b></span>`;
+  render();
+}
+
+function render() {
+  const root = document.getElementById("projects");
+  if (!last.projects.length) { root.innerHTML = `<div class="card empty">No projects yet. Add one to start.</div>`; return; }
+  const focus = document.activeElement && document.activeElement.dataset.keep;
+  for (const p of last.projects) {
+    let el = document.getElementById("p-" + p.id);
+    if (!el) { el = document.createElement("section"); el.className = "card"; el.id = "p-" + p.id; root.appendChild(el); el.innerHTML = skeleton(p); openTab[p.id] = openTab[p.id] || "handoffs"; loadTab(p.id); }
+    fill(el, p, focus);
+  }
+  for (const el of [...root.children]) if (el.id && !last.projects.find(p => "p-" + p.id === el.id)) el.remove();
+  const empty = root.querySelector(".empty"); if (empty) empty.remove();
+}
+
+function skeleton(p) {
+  return `<div class="row spread">
+      <div><div class="title" data-f="name"></div><div class="sub" data-f="paths"></div></div>
+      <div class="row">
+        <span class="pill" data-f="status"><span class="dot"></span><span></span></span>
+        <label class="switch"><input type="checkbox" data-f="enabled" onchange="setField('${p.id}', {enabled: this.checked})"> On</label>
+        <button data-f="run" onclick="act('${p.id}','run')">Run now</button>
+        <button data-f="stop" class="danger" onclick="act('${p.id}','stop')">Stop</button>
+      </div>
+    </div>
+    <div class="sub" data-f="reason" style="margin-top:6px"></div>
+    <div class="grid">
+      <label>Workers, in order (click to turn on or off; arrows reorder)<div class="order" data-f="order"></div></label>
+      <label>Local model <select data-f="model" onchange="setField('${p.id}', {local_model: this.value || null})"></select></label>
+      <label>Runs per day <input type="number" min="1" data-f="cap" data-keep="cap" onchange="setField('${p.id}', {max_runs_per_day: +this.value})"></label>
+      <label>Relay branch <div data-f="branch" style="color:var(--ink); padding-top:4px"></div></label>
+    </div>
+    <label style="margin-top:12px">Next task for the worker (empty: it picks from the project's checklist)
+      <textarea data-f="task" data-keep="task" oninput="drafts['${p.id}']=this.value"></textarea></label>
+    <label style="margin-top:10px">Queued tasks, one per line (each becomes the next task when the current one is done)
+      <textarea data-f="queue" data-keep="queue" oninput="qdrafts['${p.id}']=this.value"></textarea></label>
+    <div class="row" style="justify-content:flex-end; margin-top:6px">
+      <button onclick="saveTask('${p.id}')">Save tasks</button>
+    </div>
+    <div class="tabs">
+      ${["handoffs", "log", "branch", "events"].map(t => `<button data-tab="${t}" onclick="tab('${p.id}','${t}')">${{handoffs:"Handoffs",log:"Live log",branch:"Branch changes",events:"History"}[t]}</button>`).join("")}
+      <span style="flex:1"></span><button class="danger" style="border:0" onclick="removeProject('${p.id}')">Remove</button>
+    </div>
+    <div class="pane" data-f="pane"></div>`;
+}
+
+function fill(el, p, focus) {
+  const c = p.config, st = p.state, q = sel => el.querySelector(`[data-f="${sel}"]`);
+  q("name").textContent = c.name || p.id;
+  q("paths").textContent = `${c.repo}  ·  worktree ${c.worktree}`;
+  const phase = st.phase || "";
+  const pill = q("status"); pill.className = "pill " + cls(phase);
+  pill.lastElementChild.textContent = LABELS[phase] || phase || "Not run yet";
+  q("enabled").checked = !!c.enabled;
+  const working = last.worker.project === p.id;
+  q("run").disabled = working || p.run_requested; q("run").textContent = p.run_requested ? "Starting…" : "Run now";
+  q("stop").disabled = !working && !p.run_requested;
+  const parts = [st.reason, st.runs_today != null ? `${st.runs_today} run(s) today` : "", st.last_finished_at ? `last finished ${ago(st.last_finished_at)}` : ""].filter(Boolean);
+  q("reason").textContent = parts.join(" · ");
+  const order = c.provider_order, all = [...order, ...last.providers.filter(x => !order.includes(x))];
+  q("order").innerHTML = all.map(x => {
+    const on = order.includes(x), i = order.indexOf(x);
+    const why = st.unavailable && st.unavailable[x] ? ` title="${esc(st.unavailable[x])}"` : "";
+    return `<span class="${on ? "" : "off"}"${why}><a style="cursor:pointer" onclick="toggleProvider('${p.id}','${x}')">${on ? (i + 1) + ". " : ""}${PROVIDER_NAMES[x]}</a>` +
+      (on ? `<button title="Move earlier" onclick="move('${p.id}','${x}',-1)">‹</button><button title="Move later" onclick="move('${p.id}','${x}',1)">›</button>` : "") + `</span>`;
+  }).join("");
+  const models = last.ollama.models;
+  const msel = q("model");
+  const want = c.local_model || "";
+  const opts = [`<option value="">Default (${esc(last.settings.local_model || "not set")})</option>`, ...models.map(m => `<option ${m === want ? "selected" : ""}>${esc(m)}</option>`)].join("");
+  if (msel.dataset.sig !== opts) { msel.innerHTML = opts; msel.dataset.sig = opts; }
+  if (focus !== "cap") q("cap").value = c.max_runs_per_day;
+  const b = p.branch;
+  q("branch").innerHTML = b.error ? esc(b.error) : `${esc(c.branch)} · <b>${b.ahead}</b> commit(s) to review${b.dirty ? " · uncommitted work" : ""}`;
+  if (focus !== "task" && drafts[p.id] === undefined) q("task").value = c.next_task || "";
+  if (focus !== "queue" && qdrafts[p.id] === undefined) q("queue").value = (c.queue || []).join("\n");
+  for (const t of el.querySelectorAll(".tabs [data-tab]")) t.classList.toggle("on", t.dataset.tab === openTab[p.id]);
+  if (openTab[p.id] === "log" && working) loadTab(p.id);
+}
+
+async function loadTab(id, name) {
+  const pane = document.querySelector(`#p-${id} [data-f="pane"]`);
+  const t = openTab[id];
+  try {
+    if (t === "handoffs") {
+      const p = last.projects.find(x => x.id === id);
+      if (!p.handoffs.length) { pane.innerHTML = `<div class="sub">No handoffs yet.</div>`; return; }
+      const pick = name || pane.dataset.pick || p.handoffs[0];
+      pane.dataset.pick = pick;
+      const h = await api(`/api/projects/${id}/handoff?name=${encodeURIComponent(pick)}`);
+      pane.innerHTML = `<div class="split"><div class="list">${p.handoffs.map(n => `<a onclick="loadTab('${id}','${esc(n)}')" style="${n === pick ? "color:var(--accent)" : ""}">${esc(n)}</a>`).join("")}</div><pre>${esc(h.text)}</pre></div>`;
+    } else if (t === "log") {
+      const l = await api(`/api/projects/${id}/log`);
+      pane.innerHTML = l.file ? `<div class="sub">${esc(l.file)}</div><div class="log">` + l.lines.map(x =>
+        `<div class="${x.kind}">${esc(x.text)}${x.detail ? `<pre>${esc(x.detail)}</pre>` : ""}</div>`).join("") + `</div>` : `<div class="sub">No runs yet.</div>`;
+      pane.scrollTop = pane.scrollHeight;
+    } else if (t === "branch") {
+      const d = await api(`/api/projects/${id}/diff`);
+      pane.innerHTML = `<div class="sub">Commits on the relay branch that the main branch does not have. Review, then merge or reset by hand.</div>` +
+        `<pre>${esc(d.commits || "none")}</pre><div class="sub" style="margin-top:8px">Files</div><pre>${esc(d.stat || "none")}</pre>` +
+        (d.uncommitted ? `<div class="sub" style="margin-top:8px">Uncommitted in the worktree</div><pre>${esc(d.uncommitted)}</pre>` : "");
+    } else {
+      const e = await api(`/api/projects/${id}/events`);
+      pane.innerHTML = `<pre>${esc(e.events.slice().reverse().map(x => `${x.at}  ${x.kind}  ${x.provider || ""} ${x.outcome || ""} ${x.message || ""}`).join("\n") || "none")}</pre>`;
+    }
+  } catch (err) { pane.innerHTML = `<div class="sub">${esc(err.message)}</div>`; }
+}
+function tab(id, t) { openTab[id] = t; render(); loadTab(id); }
+
+async function setField(id, body) { try { await api(`/api/projects/${id}`, body); toast("Saved"); refresh(); } catch (e) { toast(e.message); } }
+async function saveTask(id) {
+  const v = document.querySelector(`#p-${id} [data-f="task"]`).value;
+  const queue = document.querySelector(`#p-${id} [data-f="queue"]`).value.split("\n").map(x => x.trim()).filter(Boolean);
+  await setField(id, { next_task: v, queue }); delete drafts[id]; delete qdrafts[id];
+}
+async function act(id, what) { try { await api(`/api/projects/${id}/${what}`, {}); toast(what === "run" ? "Starting at the next check" : "Stopping"); refresh(); } catch (e) { toast(e.message); } }
+function orderOf(id) { return [...last.projects.find(p => p.id === id).config.provider_order]; }
+function toggleProvider(id, x) { const o = orderOf(id); const i = o.indexOf(x); if (i >= 0) o.splice(i, 1); else o.push(x); setField(id, { provider_order: o }); }
+function move(id, x, d) { const o = orderOf(id); const i = o.indexOf(x), j = i + d; if (j < 0 || j >= o.length) return; [o[i], o[j]] = [o[j], o[i]]; setField(id, { provider_order: o }); }
+async function removeProject(id) {
+  if (!confirm("Remove this project from the relay? Its worktree, branch and history stay on disk.")) return;
+  try { await api(`/api/projects/${id}/remove`, {}); toast("Removed"); refresh(); } catch (e) { toast(e.message); }
+}
+async function addProject(ev) {
+  ev.preventDefault();
+  const f = new FormData(ev.target);
+  try { await api("/api/projects", Object.fromEntries(f)); ev.target.reset(); ev.target.closest("dialog").close(); toast("Added (paused until you turn it on)"); refresh(); }
+  catch (e) { toast(e.message); }
+}
+function openSettings() {
+  const s = last.settings, f = document.querySelector("#setDlg form");
+  document.getElementById("setModel").innerHTML = `<option value="">none</option>` + last.ollama.models.map(m => `<option ${m === s.local_model ? "selected" : ""}>${esc(m)}</option>`).join("");
+  f.ram_limit_gb.value = s.ram_limit_gb; f.quiet_min.value = Math.round(s.quiet_seconds / 60); f.claude_activity_scope.value = s.claude_activity_scope;
+  document.getElementById("setDlg").showModal();
+}
+async function saveSettings(ev) {
+  ev.preventDefault();
+  const f = ev.target;
+  try {
+    await api("/api/settings", { local_model: f.local_model.value || null, ram_limit_gb: +f.ram_limit_gb.value,
+      quiet_seconds: Math.max(60, +f.quiet_min.value * 60), claude_activity_scope: f.claude_activity_scope.value });
+    f.closest("dialog").close(); toast("Settings saved"); refresh();
+  } catch (e) { toast(e.message); }
+}
+document.getElementById("globalOn").addEventListener("change", async e => {
+  try { await api("/api/settings", { enabled: e.target.checked }); toast(e.target.checked ? "Relay on" : "Relay paused"); refresh(); } catch (err) { toast(err.message); }
+});
+refresh(); setInterval(refresh, 4000);
+</script>
+</body>
+</html>
